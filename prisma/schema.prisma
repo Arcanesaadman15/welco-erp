@@ -1,0 +1,725 @@
+// Welco ERP Database Schema
+// PostgreSQL with Prisma ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================
+// MASTER DATA MODULE
+// ============================================
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  permissions Permission[]
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Permission {
+  id         String   @id @default(cuid())
+  roleId     String
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  module     String   // e.g., "inventory", "sales", "purchase", "accounts"
+  action     String   // e.g., "read", "write", "delete", "approve"
+  createdAt  DateTime @default(now())
+
+  @@unique([roleId, module, action])
+}
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  password          String   // Hashed password
+  fullName          String
+  phone             String?
+  roleId            String?
+  role              Role?    @relation(fields: [roleId], references: [id])
+  departmentId      String?
+  department        Department? @relation(fields: [departmentId], references: [id])
+  status            String   @default("active") // active, inactive
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  purchaseRequisitions PurchaseRequisition[]
+  purchaseOrders       PurchaseOrder[]
+  salesOrders          SalesOrder[]
+  quotations           Quotation[]
+  voucherCreated       Voucher[]    @relation("VoucherCreatedBy")
+  voucherApproved      Voucher[]    @relation("VoucherApprovedBy")
+  auditLogs            AuditLog[]
+  notifications        Notification[]
+  workOrders           WorkOrder[]
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  code      String   @unique
+  users     User[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Location {
+  id           String   @id @default(cuid())
+  name         String
+  code         String   @unique
+  address      String?
+  type         String   // warehouse, site, office, store
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  stockLedger  StockLedger[]
+  itemStocks   ItemStock[]
+}
+
+// ============================================
+// SUPPLIER & CUSTOMER MODULE
+// ============================================
+
+model Supplier {
+  id             String   @id @default(cuid())
+  code           String   @unique
+  name           String
+  type           String   // local, foreign
+  ultimateSupplier String? // For tracking ultimate supplier
+  contactPerson  String?
+  phone          String?
+  email          String?
+  address        String?
+  country        String?
+  taxId          String?
+  bankDetails    String?
+  creditTermDays Int      @default(30)
+  balance        Decimal  @default(0) @db.Decimal(18, 2)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  purchaseOrders    PurchaseOrder[]
+  supplierQuotations SupplierQuotation[]
+  lettersOfCredit   LetterOfCredit[]
+  supplierBills     SupplierBill[]
+  payments          Payment[]
+}
+
+model Customer {
+  id             String   @id @default(cuid())
+  code           String   @unique
+  name           String
+  contactPerson  String?
+  phone          String?
+  email          String?
+  billingAddress String?
+  shippingAddress String?
+  taxId          String?
+  creditLimit    Decimal  @default(0) @db.Decimal(18, 2)
+  creditTermDays Int      @default(30)
+  balance        Decimal  @default(0) @db.Decimal(18, 2)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  quotations      Quotation[]
+  salesOrders     SalesOrder[]
+  salesInvoices   SalesInvoice[]
+  serviceBills    ServiceBill[]
+  payments        Payment[]
+}
+
+// ============================================
+// ITEM & INVENTORY MODULE
+// ============================================
+
+model ItemCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  parentId    String?
+  parent      ItemCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    ItemCategory[] @relation("CategoryHierarchy")
+  items       Item[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Item {
+  id              String   @id @default(cuid())
+  code            String   @unique // SKU
+  name            String
+  description     String?
+  categoryId      String?
+  category        ItemCategory? @relation(fields: [categoryId], references: [id])
+  unitOfMeasure   String   // pcs, kg, ltr, mtr, etc.
+  hsCode          String?  // HS Code for customs
+  countryOfOrigin String?
+  minStockLevel   Decimal  @default(0) @db.Decimal(18, 2)
+  reorderPoint    Decimal  @default(0) @db.Decimal(18, 2)
+  costPrice       Decimal  @default(0) @db.Decimal(18, 2) // Weighted Average Cost
+  sellingPrice    Decimal  @default(0) @db.Decimal(18, 2)
+  taxRate         Decimal  @default(0) @db.Decimal(5, 2) // VAT percentage
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  barcodes              Barcode[]
+  itemStocks            ItemStock[]
+  stockLedger           StockLedger[]
+  prItems               PRItem[]
+  poItems               POItem[]
+  quoteItems            QuoteItem[]
+  soItems               SOItem[]
+  challanItems          ChallanItem[]
+  invoiceItems          InvoiceItem[]
+  landedCostAllocations LandedCostAllocation[]
+}
+
+model Barcode {
+  id            String   @id @default(cuid())
+  itemId        String
+  item          Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  barcodeString String   @unique
+  format        String   @default("CODE128") // CODE128, QR, EAN13
+  batchNumber   String?
+  serialNumber  String?
+  expiryDate    DateTime?
+  createdAt     DateTime @default(now())
+}
+
+model ItemStock {
+  id          String   @id @default(cuid())
+  itemId      String
+  item        Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  locationId  String
+  location    Location @relation(fields: [locationId], references: [id])
+  quantity    Decimal  @default(0) @db.Decimal(18, 2)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([itemId, locationId])
+}
+
+model StockLedger {
+  id              String   @id @default(cuid())
+  itemId          String
+  item            Item     @relation(fields: [itemId], references: [id])
+  locationId      String
+  location        Location @relation(fields: [locationId], references: [id])
+  transactionType String   // purchase, sale, transfer_in, transfer_out, adjustment, return
+  quantity        Decimal  @db.Decimal(18, 2) // Positive for IN, Negative for OUT
+  unitCost        Decimal? @db.Decimal(18, 2)
+  referenceType   String?  // PO, Challan, Adjustment, Transfer
+  referenceId     String?
+  remarks         String?
+  transactionDate DateTime @default(now())
+  createdAt       DateTime @default(now())
+}
+
+// ============================================
+// PURCHASE MODULE
+// ============================================
+
+model PurchaseRequisition {
+  id           String   @id @default(cuid())
+  prNumber     String   @unique
+  requestedById String
+  requestedBy  User     @relation(fields: [requestedById], references: [id])
+  requestDate  DateTime @default(now())
+  requiredDate DateTime?
+  priority     String   @default("normal") // low, normal, high, urgent
+  status       String   @default("pending") // pending, approved, rejected, converted
+  remarks      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  items              PRItem[]
+  supplierQuotations SupplierQuotation[]
+  purchaseOrder      PurchaseOrder?
+}
+
+model PRItem {
+  id                String   @id @default(cuid())
+  prId              String
+  purchaseRequisition PurchaseRequisition @relation(fields: [prId], references: [id], onDelete: Cascade)
+  itemId            String
+  item              Item     @relation(fields: [itemId], references: [id])
+  quantityRequested Decimal  @db.Decimal(18, 2)
+  remarks           String?
+}
+
+model SupplierQuotation {
+  id            String   @id @default(cuid())
+  prId          String
+  purchaseRequisition PurchaseRequisition @relation(fields: [prId], references: [id], onDelete: Cascade)
+  supplierId    String
+  supplier      Supplier @relation(fields: [supplierId], references: [id])
+  quotedPrice   Decimal  @db.Decimal(18, 2)
+  quotedDate    DateTime @default(now())
+  validUntil    DateTime?
+  isSelected    Boolean  @default(false)
+  justification String?
+  createdAt     DateTime @default(now())
+}
+
+model LetterOfCredit {
+  id            String   @id @default(cuid())
+  lcNumber      String   @unique
+  supplierId    String
+  supplier      Supplier @relation(fields: [supplierId], references: [id])
+  bankName      String
+  bankBranch    String?
+  openingDate   DateTime
+  shipmentDate  DateTime?
+  expiryDate    DateTime
+  totalValue    Decimal  @db.Decimal(18, 2)
+  currency      String   @default("USD")
+  exchangeRate  Decimal  @default(1) @db.Decimal(18, 6)
+  status        String   @default("open") // open, shipped, documents_received, cleared, closed
+  remarks       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  purchaseOrders PurchaseOrder[]
+  lcCosts        LCCost[]
+  landedCostAllocations LandedCostAllocation[]
+}
+
+model LCCost {
+  id            String   @id @default(cuid())
+  lcId          String
+  letterOfCredit LetterOfCredit @relation(fields: [lcId], references: [id], onDelete: Cascade)
+  costType      String   // freight, customs_duty, insurance, port_charges, clearing, transport, other
+  description   String?
+  amount        Decimal  @db.Decimal(18, 2)
+  currency      String   @default("BDT")
+  exchangeRate  Decimal  @default(1) @db.Decimal(18, 6)
+  referenceDoc  String?  // Document reference
+  createdAt     DateTime @default(now())
+}
+
+model LandedCostAllocation {
+  id            String   @id @default(cuid())
+  lcId          String
+  letterOfCredit LetterOfCredit @relation(fields: [lcId], references: [id])
+  itemId        String
+  item          Item     @relation(fields: [itemId], references: [id])
+  allocatedCost Decimal  @db.Decimal(18, 2)
+  allocationBasis String  // quantity, value, weight
+  createdAt     DateTime @default(now())
+}
+
+model PurchaseOrder {
+  id            String   @id @default(cuid())
+  poNumber      String   @unique
+  supplierId    String
+  supplier      Supplier @relation(fields: [supplierId], references: [id])
+  prId          String?  @unique
+  purchaseRequisition PurchaseRequisition? @relation(fields: [prId], references: [id])
+  lcId          String?
+  letterOfCredit LetterOfCredit? @relation(fields: [lcId], references: [id])
+  orderType     String   @default("local") // local, foreign
+  orderDate     DateTime @default(now())
+  expectedDate  DateTime?
+  totalAmount   Decimal  @db.Decimal(18, 2)
+  taxAmount     Decimal  @default(0) @db.Decimal(18, 2)
+  discountAmount Decimal @default(0) @db.Decimal(18, 2)
+  status        String   @default("issued") // issued, partial, received, closed, cancelled
+  approvalStatus String  @default("pending") // pending, approved, rejected
+  approvedById  String?
+  approvedBy    User?    @relation(fields: [approvedById], references: [id])
+  remarks       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  items         POItem[]
+  supplierBills SupplierBill[]
+}
+
+model POItem {
+  id              String   @id @default(cuid())
+  poId            String
+  purchaseOrder   PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  itemId          String
+  item            Item     @relation(fields: [itemId], references: [id])
+  quantityOrdered Decimal  @db.Decimal(18, 2)
+  quantityReceived Decimal @default(0) @db.Decimal(18, 2)
+  unitPrice       Decimal  @db.Decimal(18, 2)
+  taxRate         Decimal  @default(0) @db.Decimal(5, 2)
+  totalPrice      Decimal  @db.Decimal(18, 2)
+}
+
+// ============================================
+// SALES MODULE
+// ============================================
+
+model Quotation {
+  id            String   @id @default(cuid())
+  quoteNumber   String   @unique
+  customerId    String
+  customer      Customer @relation(fields: [customerId], references: [id])
+  createdById   String
+  createdBy     User     @relation(fields: [createdById], references: [id])
+  quoteDate     DateTime @default(now())
+  validUntil    DateTime
+  totalAmount   Decimal  @db.Decimal(18, 2)
+  discountAmount Decimal @default(0) @db.Decimal(18, 2)
+  taxAmount     Decimal  @default(0) @db.Decimal(18, 2)
+  netAmount     Decimal  @db.Decimal(18, 2)
+  status        String   @default("draft") // draft, sent, revised, accepted, rejected, expired
+  version       Int      @default(1)
+  remarks       String?
+  terms         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  items         QuoteItem[]
+  salesOrder    SalesOrder?
+}
+
+model QuoteItem {
+  id          String   @id @default(cuid())
+  quoteId     String
+  quotation   Quotation @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  itemId      String
+  item        Item     @relation(fields: [itemId], references: [id])
+  description String?
+  quantity    Decimal  @db.Decimal(18, 2)
+  unitPrice   Decimal  @db.Decimal(18, 2)
+  discount    Decimal  @default(0) @db.Decimal(18, 2)
+  taxRate     Decimal  @default(0) @db.Decimal(5, 2)
+  totalPrice  Decimal  @db.Decimal(18, 2)
+}
+
+model SalesOrder {
+  id            String   @id @default(cuid())
+  soNumber      String   @unique
+  quoteId       String?  @unique
+  quotation     Quotation? @relation(fields: [quoteId], references: [id])
+  customerId    String
+  customer      Customer @relation(fields: [customerId], references: [id])
+  createdById   String
+  createdBy     User     @relation(fields: [createdById], references: [id])
+  orderDate     DateTime @default(now())
+  deliveryDate  DateTime?
+  totalAmount   Decimal  @db.Decimal(18, 2)
+  discountAmount Decimal @default(0) @db.Decimal(18, 2)
+  taxAmount     Decimal  @default(0) @db.Decimal(18, 2)
+  netAmount     Decimal  @db.Decimal(18, 2)
+  status        String   @default("confirmed") // confirmed, processing, partial, delivered, closed, cancelled
+  remarks       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  items           SOItem[]
+  workOrders      WorkOrder[]
+  deliveryChallans DeliveryChallan[]
+  salesInvoices   SalesInvoice[]
+}
+
+model SOItem {
+  id              String   @id @default(cuid())
+  soId            String
+  salesOrder      SalesOrder @relation(fields: [soId], references: [id], onDelete: Cascade)
+  itemId          String
+  item            Item     @relation(fields: [itemId], references: [id])
+  description     String?
+  quantityOrdered Decimal  @db.Decimal(18, 2)
+  quantityDelivered Decimal @default(0) @db.Decimal(18, 2)
+  unitPrice       Decimal  @db.Decimal(18, 2)
+  discount        Decimal  @default(0) @db.Decimal(18, 2)
+  taxRate         Decimal  @default(0) @db.Decimal(5, 2)
+  totalPrice      Decimal  @db.Decimal(18, 2)
+}
+
+model WorkOrder {
+  id            String   @id @default(cuid())
+  woNumber      String   @unique
+  soId          String
+  salesOrder    SalesOrder @relation(fields: [soId], references: [id])
+  assignedToId  String?
+  assignedTo    User?    @relation(fields: [assignedToId], references: [id])
+  startDate     DateTime?
+  completionDate DateTime?
+  status        String   @default("pending") // pending, in_progress, completed, cancelled
+  remarks       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model DeliveryChallan {
+  id            String   @id @default(cuid())
+  challanNumber String   @unique
+  soId          String
+  salesOrder    SalesOrder @relation(fields: [soId], references: [id])
+  deliveryDate  DateTime @default(now())
+  driverName    String?
+  vehicleNumber String?
+  receivedBy    String?
+  status        String   @default("pending") // pending, dispatched, delivered
+  remarks       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  items         ChallanItem[]
+  salesInvoice  SalesInvoice?
+}
+
+model ChallanItem {
+  id              String   @id @default(cuid())
+  challanId       String
+  deliveryChallan DeliveryChallan @relation(fields: [challanId], references: [id], onDelete: Cascade)
+  itemId          String
+  item            Item     @relation(fields: [itemId], references: [id])
+  quantityDelivered Decimal @db.Decimal(18, 2)
+}
+
+model ServiceBill {
+  id            String   @id @default(cuid())
+  billNumber    String   @unique
+  customerId    String
+  customer      Customer @relation(fields: [customerId], references: [id])
+  soId          String?  // Optional link to Sales Order
+  serviceDescription String
+  amount        Decimal  @db.Decimal(18, 2)
+  taxAmount     Decimal  @default(0) @db.Decimal(18, 2)
+  totalAmount   Decimal  @db.Decimal(18, 2)
+  billDate      DateTime @default(now())
+  dueDate       DateTime
+  status        String   @default("unpaid") // unpaid, partial, paid
+  paidAmount    Decimal  @default(0) @db.Decimal(18, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ============================================
+// ACCOUNTS MODULE
+// ============================================
+
+model ChartOfAccounts {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  name          String
+  accountType   String   // asset, liability, equity, income, expense
+  parentId      String?
+  parent        ChartOfAccounts?  @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children      ChartOfAccounts[] @relation("AccountHierarchy")
+  description   String?
+  isActive      Boolean  @default(true)
+  balance       Decimal  @default(0) @db.Decimal(18, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  glDetails     GLDetail[]
+}
+
+model Voucher {
+  id            String   @id @default(cuid())
+  voucherNumber String   @unique
+  voucherType   String   // payment, receipt, journal, contra
+  voucherDate   DateTime @default(now())
+  narrative     String?
+  totalAmount   Decimal  @db.Decimal(18, 2)
+  status        String   @default("draft") // draft, pending, approved, posted, cancelled
+  createdById   String
+  createdBy     User     @relation("VoucherCreatedBy", fields: [createdById], references: [id])
+  approvedById  String?
+  approvedBy    User?    @relation("VoucherApprovedBy", fields: [approvedById], references: [id])
+  approvedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  glEntries     GeneralLedger[]
+}
+
+model GeneralLedger {
+  id            String   @id @default(cuid())
+  voucherId     String
+  voucher       Voucher  @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  transactionDate DateTime
+  description   String?
+  referenceType String?  // invoice, bill, payment
+  referenceId   String?
+  createdAt     DateTime @default(now())
+
+  // Relations
+  details       GLDetail[]
+}
+
+model GLDetail {
+  id          String   @id @default(cuid())
+  glEntryId   String
+  glEntry     GeneralLedger @relation(fields: [glEntryId], references: [id], onDelete: Cascade)
+  accountId   String
+  account     ChartOfAccounts @relation(fields: [accountId], references: [id])
+  debit       Decimal  @default(0) @db.Decimal(18, 2)
+  credit      Decimal  @default(0) @db.Decimal(18, 2)
+  narration   String?
+}
+
+model SalesInvoice {
+  id            String   @id @default(cuid())
+  invoiceNumber String   @unique
+  soId          String
+  salesOrder    SalesOrder @relation(fields: [soId], references: [id])
+  challanId     String?  @unique
+  deliveryChallan DeliveryChallan? @relation(fields: [challanId], references: [id])
+  customerId    String
+  customer      Customer @relation(fields: [customerId], references: [id])
+  invoiceDate   DateTime @default(now())
+  dueDate       DateTime
+  totalAmount   Decimal  @db.Decimal(18, 2)
+  discountAmount Decimal @default(0) @db.Decimal(18, 2)
+  taxAmount     Decimal  @default(0) @db.Decimal(18, 2)
+  netAmount     Decimal  @db.Decimal(18, 2)
+  paidAmount    Decimal  @default(0) @db.Decimal(18, 2)
+  status        String   @default("unpaid") // unpaid, partial, paid
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  items         InvoiceItem[]
+  payments      Payment[]
+}
+
+model InvoiceItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  invoice     SalesInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  itemId      String
+  item        Item     @relation(fields: [itemId], references: [id])
+  description String?
+  quantity    Decimal  @db.Decimal(18, 2)
+  unitPrice   Decimal  @db.Decimal(18, 2)
+  discount    Decimal  @default(0) @db.Decimal(18, 2)
+  taxRate     Decimal  @default(0) @db.Decimal(5, 2)
+  taxAmount   Decimal  @default(0) @db.Decimal(18, 2)
+  totalPrice  Decimal  @db.Decimal(18, 2)
+}
+
+model SupplierBill {
+  id            String   @id @default(cuid())
+  billNumber    String   @unique
+  poId          String
+  purchaseOrder PurchaseOrder @relation(fields: [poId], references: [id])
+  supplierId    String
+  supplier      Supplier @relation(fields: [supplierId], references: [id])
+  billDate      DateTime
+  dueDate       DateTime
+  totalAmount   Decimal  @db.Decimal(18, 2)
+  taxAmount     Decimal  @default(0) @db.Decimal(18, 2)
+  paidAmount    Decimal  @default(0) @db.Decimal(18, 2)
+  status        String   @default("unpaid") // unpaid, partial, paid
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  payments      Payment[]
+}
+
+model Payment {
+  id            String   @id @default(cuid())
+  paymentNumber String   @unique
+  paymentType   String   // incoming (collection), outgoing (payment)
+  partyType     String   // customer, supplier
+  customerId    String?
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  supplierId    String?
+  supplier      Supplier? @relation(fields: [supplierId], references: [id])
+  amount        Decimal  @db.Decimal(18, 2)
+  paymentMode   String   // cash, cheque, bank_transfer
+  referenceNumber String? // Cheque number or transaction ID
+  bankName      String?
+  paymentDate   DateTime @default(now())
+  invoiceId     String?
+  salesInvoice  SalesInvoice? @relation(fields: [invoiceId], references: [id])
+  billId        String?
+  supplierBill  SupplierBill? @relation(fields: [billId], references: [id])
+  remarks       String?
+  createdAt     DateTime @default(now())
+}
+
+// ============================================
+// TAX MODULE
+// ============================================
+
+model TaxRecord {
+  id            String   @id @default(cuid())
+  referenceType String   // invoice, bill
+  referenceId   String
+  taxType       String   // vat, customs_duty, withholding
+  rate          Decimal  @db.Decimal(5, 2)
+  amount        Decimal  @db.Decimal(18, 2)
+  period        String   // YYYY-MM format
+  createdAt     DateTime @default(now())
+}
+
+// ============================================
+// SYSTEM & AUDIT MODULE
+// ============================================
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  actionType  String   // create, update, delete, login, logout, approve
+  tableName   String
+  recordId    String?
+  oldValue    Json?
+  newValue    Json?
+  ipAddress   String?
+  userAgent   String?
+  timestamp   DateTime @default(now())
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  type        String   // low_stock, payment_due, approval_required, etc.
+  title       String
+  message     String
+  isRead      Boolean  @default(false)
+  link        String?  // URL to related page
+  createdAt   DateTime @default(now())
+}
+
+model SystemSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}
+
+model FiscalYear {
+  id          String   @id @default(cuid())
+  name        String
+  startDate   DateTime
+  endDate     DateTime
+  isClosed    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
