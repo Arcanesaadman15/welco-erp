@@ -128,6 +128,7 @@ npm run lint         # Run ESLint
 ### Database
 
 ```bash
+npm run db:generate  # Generate Prisma client (auto-runs on npm install)
 npm run db:push      # Push Prisma schema to database
 npm run db:seed      # Seed database with initial data
 npm run db:studio    # Open Prisma Studio (database GUI)
@@ -347,6 +348,16 @@ DATABASE_URL="postgresql://postgres:welco2026@localhost:5433/welco_erp"
 ```
 
 ### Prisma Issues
+
+**Error**: `@prisma/client did not initialize yet`
+
+```bash
+# Generate the Prisma client
+npm run db:generate
+
+# Or run it directly
+npx prisma generate
+```
 
 **Error**: `Prisma schema out of sync`
 
