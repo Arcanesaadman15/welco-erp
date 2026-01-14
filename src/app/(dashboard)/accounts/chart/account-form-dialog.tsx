@@ -33,8 +33,8 @@ import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 const formSchema = z.object({
-  code: z.string().min(1, 'Code is required'),
-  name: z.string().min(1, 'Name is required'),
+  code: z.string().trim().min(1, 'Code is required'),
+  name: z.string().trim().min(1, 'Name is required'),
   accountType: z.enum(['asset', 'liability', 'equity', 'income', 'expense']),
   parentId: z.string().optional().default('none'),
   description: z.string().optional(),

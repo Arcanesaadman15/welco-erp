@@ -15,10 +15,10 @@ import { toast } from 'sonner'
 import { BarcodeScanner } from '@/components/barcode-scanner'
 
 const formSchema = z.object({
-  itemId: z.string().min(1, 'Item is required'),
-  locationId: z.string().min(1, 'Location is required'),
-  quantity: z.number().positive('Quantity must be positive'),
-  unitCost: z.number().min(0).optional(),
+  itemId: z.string().trim().min(1, 'Item is required'),
+  locationId: z.string().trim().min(1, 'Location is required'),
+  quantity: z.coerce.number().positive('Quantity must be positive'),
+  unitCost: z.coerce.number().min(0).optional(),
   referenceType: z.string().optional(),
   referenceId: z.string().optional(),
   remarks: z.string().optional(),

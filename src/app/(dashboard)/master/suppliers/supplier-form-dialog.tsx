@@ -33,8 +33,8 @@ import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 const formSchema = z.object({
-  code: z.string().min(1, 'Code is required'),
-  name: z.string().min(1, 'Name is required'),
+  code: z.string().trim().min(1, 'Code is required'),
+  name: z.string().trim().min(1, 'Name is required'),
   type: z.enum(['local', 'foreign']),
   ultimateSupplier: z.string().optional(),
   contactPerson: z.string().optional(),
@@ -44,7 +44,7 @@ const formSchema = z.object({
   country: z.string().optional(),
   taxId: z.string().optional(),
   bankDetails: z.string().optional(),
-  creditTermDays: z.number().min(0),
+  creditTermDays: z.coerce.number().min(0),
 })
 
 type FormValues = z.infer<typeof formSchema>

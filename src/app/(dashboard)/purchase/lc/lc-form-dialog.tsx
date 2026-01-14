@@ -33,16 +33,16 @@ import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 const formSchema = z.object({
-  lcNumber: z.string().min(1, 'LC number is required'),
-  supplierId: z.string().min(1, 'Supplier is required'),
-  bankName: z.string().min(1, 'Bank name is required'),
+  lcNumber: z.string().trim().min(1, 'LC number is required'),
+  supplierId: z.string().trim().min(1, 'Supplier is required'),
+  bankName: z.string().trim().min(1, 'Bank name is required'),
   bankBranch: z.string().optional(),
-  openingDate: z.string().min(1, 'Opening date is required'),
+  openingDate: z.string().trim().min(1, 'Opening date is required'),
   shipmentDate: z.string().optional(),
-  expiryDate: z.string().min(1, 'Expiry date is required'),
-  totalValue: z.number().positive('Value must be positive'),
-  currency: z.string().min(1, 'Currency is required'),
-  exchangeRate: z.number().positive(),
+  expiryDate: z.string().trim().min(1, 'Expiry date is required'),
+  totalValue: z.coerce.number().positive('Value must be positive'),
+  currency: z.string().trim().min(1, 'Currency is required'),
+  exchangeRate: z.coerce.number().positive(),
   remarks: z.string().optional(),
 })
 

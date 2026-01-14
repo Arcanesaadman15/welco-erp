@@ -34,9 +34,9 @@ import { toast } from 'sonner'
 const formSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters').optional().or(z.literal('')),
-  fullName: z.string().min(1, 'Full name is required'),
+  fullName: z.string().trim().min(1, 'Full name is required'),
   phone: z.string().optional(),
-  roleId: z.string().min(1, 'Role is required'),
+  roleId: z.string().trim().min(1, 'Role is required'),
   departmentId: z.string().optional(),
   status: z.enum(['active', 'inactive']),
 })
