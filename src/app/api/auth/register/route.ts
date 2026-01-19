@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { hash } from 'bcryptjs'
 import prisma from '@/lib/prisma'
+import { getBcryptCost, validatePasswordStrength } from '@/lib/password-policy'
 
 export async function POST(request: Request) {
   try {
@@ -14,9 +15,10 @@ export async function POST(request: Request) {
       )
     }
 
-    if (password.length < 6) {
+    const passwordCheck = validatePasswordStrength(password)
+    if (!passwordCheck.valid) {
       return NextResponse.json(
-        { error: 'Password must be at least 6 characters' },
+        { error: passwordCheck.message || 'Weak password' },
         { status: 400 }
       )
     }
@@ -34,7 +36,7 @@ export async function POST(request: Request) {
     }
 
     // Hash password
-    const hashedPassword = await hash(password, 12)
+    const hashedPassword = await hash(password, getBcryptCost())
 
     // Get default role (User)
     let defaultRole = await prisma.role.findUnique({

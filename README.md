@@ -49,6 +49,19 @@ cp .env.example .env
 
 > **Note**: The default `.env` values are pre-configured to work with the included Docker setup. No changes needed for local development!
 
+#### 2a. Production Setup (Easy Path)
+
+```bash
+# Create production env file
+cp .env.example .env.production
+```
+
+Fill in `.env.production` with:
+- A strong `NEXTAUTH_SECRET`
+- A strong `POSTGRES_PASSWORD`
+- Your production `NEXTAUTH_URL`
+- Your admin bootstrap credentials (see below)
+
 #### 3. Start the Database
 
 ```bash
@@ -96,6 +109,40 @@ npm run dev
 | Admin | admin@welco.com   | admin123   |
 
 > ⚠️ **Important**: Change these credentials in production!
+
+---
+
+## ✅ Production Setup (Docker - Recommended)
+
+### 1. Create the production env file
+
+```bash
+cp .env.example .env.production
+```
+
+### 2. Start the production stack
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+```
+
+### 3. Create the initial admin (one-time, secure)
+
+Set these in `.env.production`:
+- `ADMIN_BOOTSTRAP_EMAIL`
+- `ADMIN_BOOTSTRAP_PASSWORD`
+- `ADMIN_BOOTSTRAP_TOKEN`
+- `ADMIN_BOOTSTRAP_CONFIRM` (must match the token)
+
+Then run:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production exec app npm run admin:bootstrap
+```
+
+Optional flags:
+- `ADMIN_BOOTSTRAP_ALLOW_RESET=true` to update the existing admin password
+- `ADMIN_BOOTSTRAP_FORCE=true` to allow creating a second admin
 
 ---
 
@@ -259,6 +306,22 @@ docker compose logs -f postgres
 docker compose ps
 ```
 
+### Production (Docker)
+
+```bash
+# Create production env file
+cp .env.example .env.production
+
+# Start production stack
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+```
+
+If this is the first production deployment, create the admin user once:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production exec app npm run admin:bootstrap
+```
+
 ### Database Connection Details
 
 | Setting | Value |
@@ -286,6 +349,22 @@ NODE_ENV="production"
 DATABASE_URL="your-production-database-url"
 NEXTAUTH_URL="https://your-domain.com"
 NEXTAUTH_SECRET="your-secure-generated-secret"
+```
+
+### Admin Bootstrap (Production)
+
+```env
+ADMIN_BOOTSTRAP_EMAIL="admin@yourcompany.com"
+ADMIN_BOOTSTRAP_PASSWORD="ChangeMe!123"
+ADMIN_BOOTSTRAP_NAME="System Admin"
+ADMIN_BOOTSTRAP_TOKEN="set-a-long-random-token"
+ADMIN_BOOTSTRAP_CONFIRM="set-a-long-random-token"
+```
+
+Run once:
+
+```bash
+npm run admin:bootstrap
 ```
 
 ### 3. Run Database Migrations

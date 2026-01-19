@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { requirePermission } from '@/lib/api-auth'
 
 export async function GET() {
   try {
+    const permission = await requirePermission({ module: 'admin', action: 'read' })
+    if (!permission.authorized) {
+      return permission.response
+    }
+
     const roles = await prisma.role.findMany({
       include: {
         permissions: true,

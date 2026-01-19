@@ -17,6 +17,27 @@ services:
       timeout: 5s
       retries: 5
 
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: welco-app
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgresql://postgres:welco2026@postgres:5432/welco_erp?schema=public"
+      DIRECT_URL: "postgresql://postgres:welco2026@postgres:5432/welco_erp?schema=public"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NEXTAUTH_SECRET: "your-secret-key-change-this-in-production"
+      NODE_ENV: "development"
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   postgres_data:
 

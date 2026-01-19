@@ -1,31 +1,14 @@
 import { NextResponse } from 'next/server'
 import { hash } from 'bcryptjs'
 import prisma from '@/lib/prisma'
-import { auth } from '@/lib/auth'
-
-// Helper to check admin permission
-async function checkAdminPermission() {
-  const session = await auth()
-  if (!session?.user?.email) return false
-
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    include: {
-      role: {
-        include: { permissions: true },
-      },
-    },
-  })
-
-  return user?.role?.permissions?.some(
-    (p) => p.module === 'admin' && p.action === 'read'
-  )
-}
+import { getBcryptCost, validatePasswordStrength } from '@/lib/password-policy'
+import { requirePermission } from '@/lib/api-auth'
 
 export async function GET() {
   try {
-    if (!(await checkAdminPermission())) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 })
+    const permission = await requirePermission({ module: 'admin', action: 'read' })
+    if (!permission.authorized) {
+      return permission.response
     }
 
     const users = await prisma.user.findMany({
@@ -58,8 +41,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    if (!(await checkAdminPermission())) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 })
+    const permission = await requirePermission({ module: 'admin', action: 'write' })
+    if (!permission.authorized) {
+      return permission.response
     }
 
     const body = await request.json()
@@ -82,8 +66,16 @@ export async function POST(request: Request) {
       )
     }
 
+    const passwordCheck = validatePasswordStrength(password)
+    if (!passwordCheck.valid) {
+      return NextResponse.json(
+        { success: false, error: passwordCheck.message || 'Weak password' },
+        { status: 400 }
+      )
+    }
+
     // Hash password
-    const hashedPassword = await hash(password, 12)
+    const hashedPassword = await hash(password, getBcryptCost())
 
     const user = await prisma.user.create({
       data: {

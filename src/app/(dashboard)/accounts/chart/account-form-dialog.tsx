@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -36,7 +36,7 @@ const formSchema = z.object({
   code: z.string().trim().min(1, 'Code is required'),
   name: z.string().trim().min(1, 'Name is required'),
   accountType: z.enum(['asset', 'liability', 'equity', 'income', 'expense']),
-  parentId: z.string().optional().default('none'),
+  parentId: z.string().default('none'),
   description: z.string().optional(),
 })
 
@@ -48,6 +48,7 @@ interface Account {
   name: string
   accountType: string
   description: string | null
+  parentId?: string | null
   parent: { code: string; name: string } | null
 }
 
@@ -68,6 +69,10 @@ export function AccountFormDialog({
 }: AccountFormDialogProps) {
   const [loading, setLoading] = useState(false)
   const isEditing = !!account
+  const selectableAccounts = useMemo(() => {
+    if (!account) return accounts
+    return accounts.filter((item) => item.id !== account.id)
+  }, [account, accounts])
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -75,7 +80,7 @@ export function AccountFormDialog({
       code: '',
       name: '',
       accountType: 'asset',
-      parentId: '',
+      parentId: 'none',
       description: '',
     },
   })
@@ -86,7 +91,7 @@ export function AccountFormDialog({
         code: account.code,
         name: account.name,
         accountType: account.accountType as FormValues['accountType'],
-        parentId: '',
+        parentId: account.parentId ?? 'none',
         description: account.description || '',
       })
     } else {
@@ -94,7 +99,7 @@ export function AccountFormDialog({
         code: '',
         name: '',
         accountType: 'asset',
-        parentId: '',
+        parentId: 'none',
         description: '',
       })
     }
@@ -217,7 +222,7 @@ export function AccountFormDialog({
                     </FormControl>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
-                      {accounts.map((acc) => (
+                      {selectableAccounts.map((acc) => (
                         <SelectItem key={acc.id} value={acc.id}>
                           {acc.code} - {acc.name}
                         </SelectItem>

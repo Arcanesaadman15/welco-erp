@@ -1,8 +1,55 @@
 import { PrismaClient } from '@prisma/client'
 import { hash } from 'bcryptjs'
 import { DEFAULT_PERMISSIONS } from '../src/lib/permissions'
+import { getBcryptCost, validatePasswordStrength } from '../src/lib/password-policy'
 
 const prisma = new PrismaClient()
+
+const shouldSeedUsers = process.env.SEED_USERS_ENABLE === 'true'
+const adminEmail = process.env.SEED_ADMIN_EMAIL
+const adminPassword = process.env.SEED_ADMIN_PASSWORD
+const managerEmail = process.env.SEED_MANAGER_EMAIL
+const managerPassword = process.env.SEED_MANAGER_PASSWORD
+const userEmail = process.env.SEED_USER_EMAIL
+const userPassword = process.env.SEED_USER_PASSWORD
+const bcryptCost = getBcryptCost()
+
+async function createUserIfAllowed({
+  email,
+  password,
+  fullName,
+  roleId,
+}: {
+  email?: string
+  password?: string
+  fullName: string
+  roleId: string
+}) {
+  if (!email || !password) {
+    console.log(`⚠️ Skipping ${fullName} creation: email/password not provided`)
+    return
+  }
+
+  const strength = validatePasswordStrength(password)
+  if (!strength.valid) {
+    throw new Error(`Weak password for ${email}: ${strength.message}`)
+  }
+
+  const hashedPassword = await hash(password, bcryptCost)
+
+  await prisma.user.upsert({
+    where: { email },
+    update: {},
+    create: {
+      email,
+      password: hashedPassword,
+      fullName,
+      roleId,
+    },
+  })
+
+  console.log(`✅ User ensured: ${email}`)
+}
 
 async function main() {
   console.log('🌱 Seeding database...')
@@ -126,47 +173,32 @@ async function main() {
 
   console.log('✅ Locations created')
 
-  // Create default admin user
-  const hashedPassword = await hash('admin123', 12)
-  
-  await prisma.user.upsert({
-    where: { email: 'admin@welco.com' },
-    update: {},
-    create: {
-      email: 'admin@welco.com',
-      password: hashedPassword,
+  if (shouldSeedUsers) {
+    console.log('ℹ️ User seeding enabled via SEED_USERS_ENABLE')
+
+    await createUserIfAllowed({
+      email: adminEmail,
+      password: adminPassword,
       fullName: 'System Admin',
       roleId: adminRole.id,
-    },
-  })
+    })
 
-  // Create a manager user for testing
-  const managerPassword = await hash('manager123', 12)
-  await prisma.user.upsert({
-    where: { email: 'manager@welco.com' },
-    update: {},
-    create: {
-      email: 'manager@welco.com',
+    await createUserIfAllowed({
+      email: managerEmail,
       password: managerPassword,
       fullName: 'Test Manager',
       roleId: managerRole.id,
-    },
-  })
+    })
 
-  // Create a regular user for testing
-  const userPassword = await hash('user123', 12)
-  await prisma.user.upsert({
-    where: { email: 'user@welco.com' },
-    update: {},
-    create: {
-      email: 'user@welco.com',
+    await createUserIfAllowed({
+      email: userEmail,
       password: userPassword,
       fullName: 'Test User',
       roleId: userRole.id,
-    },
-  })
-
-  console.log('✅ Test users created')
+    })
+  } else {
+    console.log('ℹ️ User creation skipped (SEED_USERS_ENABLE not true)')
+  }
 
   // Create some sample chart of accounts
   const assets = await prisma.chartOfAccounts.upsert({
@@ -283,11 +315,6 @@ async function main() {
 
   console.log('')
   console.log('🎉 Database seeding completed!')
-  console.log('')
-  console.log('📋 Test User Credentials:')
-  console.log('   Admin:   admin@welco.com / admin123')
-  console.log('   Manager: manager@welco.com / manager123')
-  console.log('   User:    user@welco.com / user123')
   console.log('')
 }
 

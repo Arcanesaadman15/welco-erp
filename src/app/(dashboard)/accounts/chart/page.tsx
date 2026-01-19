@@ -23,6 +23,7 @@ interface ChartOfAccounts {
   description: string | null
   balance: number
   isActive: boolean
+  parentId: string | null
   parent: { code: string; name: string } | null
   children: Array<{ id: string }>
 }
